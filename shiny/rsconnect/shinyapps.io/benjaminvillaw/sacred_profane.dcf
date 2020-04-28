@@ -1,0 +1,13 @@
+name: sacred_profane
+title: sacred_profane
+username:
+account: benjaminvillaw
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2187126
+bundleId: 3075355
+url: https://benjaminvillaw.shinyapps.io/sacred_profane/
+when: 1588051875.82699
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: cover_images/image_cross.jpg|cover_images/image_light.jpg|cover_images/image_roof.jpg

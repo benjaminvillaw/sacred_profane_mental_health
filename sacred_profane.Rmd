@@ -1,0 +1,351 @@
+---
+title: "The Sacred and the Profane: Religion and Mental Health in the US"
+author: "Benjamin Villa"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(infer)
+library(skimr)
+library(broom)
+library(gganimate)
+library(tidyverse)
+library(haven)
+library(ggplot2)
+library(infer)
+library(dplyr)
+library(gt)
+library(tidyr)
+library(readr)
+library(purrr)
+library(tibble)
+library(stringr)
+library(forcats)
+library(tidyselect)
+library(fivethirtyeight)
+library(devtools)
+library(ggplot2)
+library(patchwork)
+library(broom)
+library(scales)
+library(readxl)
+library(naniar)
+library(janitor)
+library(choroplethr)
+
+# https://shiny.rstudio.com/articles/layout-guide.html
+
+
+jobs <- read_excel("Data/jobs_2019.xlsx", sheet = NULL, range = NULL, col_names = TRUE,
+  col_types = NULL, na = c("**","*","#"), trim_ws = TRUE, skip = 0,
+  n_max = Inf, guess_max = min(1000, 2000),
+  progress = readxl_progress(), .name_repair = "unique")
+
+income <- read_excel("Data/income_2018.xlsx", sheet = NULL, range = NULL, col_names = TRUE,
+  col_types = NULL, na = c("**","*","#"), trim_ws = TRUE, skip = 0,
+  n_max = Inf, guess_max = min(1000, 2000),
+  progress = readxl_progress(), .name_repair = "unique")
+
+depression <-read_excel("Data/physician_depression_edit.xlsx", sheet = NULL, range = NULL, col_names = TRUE,
+  col_types = NULL, na = c("**","*","#"), trim_ws = TRUE, skip = 0,
+  n_max = Inf, guess_max = min(1000, 2000),
+  progress = readxl_progress(), .name_repair = "unique")
+
+
+```
+
+```{r jobs}
+
+jobs <-jobs %>%
+  select(area,area_title,area_type,occ_code,occ_title, tot_emp,jobs_1000_orig,loc_quotient,a_mean)
+
+jobs_religion <- jobs %>%
+  filter(str_detect(area_type, "4")) %>%
+  filter(str_detect(occ_code, "^21-2")) %>%
+  select(area,area_title,occ_code,tot_emp,jobs_1000_orig,loc_quotient,a_mean) %>%
+    na.omit() %>%
+  group_by(area,area_title) %>%
+  summarize(tot_emp = sum(tot_emp),
+            jobs_1000_orig = sum(as.numeric(jobs_1000_orig)),
+            loc_quotient = sum(as.numeric(loc_quotient)),
+            a_mean = sum(a_mean)) %>%
+  mutate(religious_workers = "religious")
+
+jobs_psych <- jobs %>%
+  filter(str_detect(area_type, "4")) %>%
+  filter(str_detect(occ_code, c("^19-303","^29-1223","^31-1133"))) %>%
+  select(area,area_title,occ_code,tot_emp,jobs_1000_orig,loc_quotient,a_mean) %>%
+    na.omit() %>%
+  group_by(area,area_title) %>%
+  summarize(tot_emp = sum(tot_emp),
+            jobs_1000_orig = sum(as.numeric(jobs_1000_orig)),
+            loc_quotient = sum(as.numeric(loc_quotient)),
+            a_mean = sum(a_mean)) %>%
+  mutate(religious_workers = "psych")
+
+jobs_social <- jobs %>%
+    filter(str_detect(area_type, "4")) %>%
+  filter(str_detect(occ_code, "^21-10")) %>%
+  select(area,area_title,occ_code,tot_emp,jobs_1000_orig,loc_quotient,a_mean) %>%
+    na.omit() %>%
+  group_by(area,area_title) %>%
+  summarize(tot_emp = sum(tot_emp),
+            jobs_1000_orig = sum(as.numeric(jobs_1000_orig)),
+            loc_quotient = sum(as.numeric(loc_quotient)),
+            a_mean = sum(a_mean)) %>%
+  mutate(religious_workers = "social")
+
+income <- income %>%
+  clean_names() %>%
+  rename(area_title = metropolitan_statistical_areas2) %>%
+  rename(income_2016 = x2016) %>%
+  rename(income_2017 = x2017) %>%
+  rename(income_2018 = x2018)
+
+joined_jobs <- inner_join(jobs_religion,jobs_psych, by= "area_title")
+
+income_jobs <- inner_join(income_jobs,income, by= "area_title")
+
+religion_social<- inner_join(jobs_religion,jobs_social, by= "area_title")
+
+psych_social <- inner_join(jobs_psych,jobs_social, by= "area_title")
+
+
+write_rds(income_jobs,"shiny/income_jobs.rds")
+write_rds(religion_social,"shiny/religion_social.rds")
+write_rds(psych_social,"shiny/psych_social.rds")
+
+
+graph_jobs_income <- income_jobs %>%
+ggplot(aes(jobs_1000_orig.x,jobs_1000_orig.y, color=income_2018.x))+ geom_point() + geom_smooth(method = "lm", se = FALSE)+
+  scale_y_log10() + scale_x_log10()
+
+
+score_model <- lm(jobs_1000_orig.x ~ jobs_1000_orig.y + income_2018, data = income_jobs2) %>%
+  tidy(conf.int = TRUE)
+
+religion_social %>%
+ggplot(aes(jobs_1000_orig.x,jobs_1000_orig.y,color=tot_emp.x))+ geom_point() + geom_smooth(method = "lm", se = FALSE)+
+  scale_y_log10() + scale_x_log10()
+
+psych_social %>%
+ggplot(aes(jobs_1000_orig.x,jobs_1000_orig.y,color=tot_emp.x))+ geom_point() + geom_smooth(method = "lm", se = FALSE)+
+  scale_y_log10() + scale_x_log10()
+
+
+
+
+```
+
+```{r Depression}
+
+depression <- depression %>%
+  clean_names() %>%
+  select(geography,yes,time) %>%
+  filter(time==2016) %>%
+  rename(area_title = geography)
+
+depression %>%
+ggplot(aes(area_title,yes)) + geom_col(position = position_stack(reverse = TRUE))
+
+
+
+```
+
+```{r Depression + Religion}
+
+dep_religion <- inner_join(jobs_religion, depression, by= "area_title")
+write_rds(dep_religion,"shiny/dep_religion.rds")
+
+```
+
+
+```{r Depression + Psych}
+
+
+dep_psych <- inner_join(jobs_psych, depression, by= "area_title")
+write_rds(dep_psych,"shiny/dep_psych.rds")
+
+
+```
+
+
+
+```{r Depression Counties}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+
+
+religious_county <- x %>%
+  filter(str_detect(occ_code, "^21-2")) %>%
+  filter(str_detect(area_type, "2")) %>%
+  select(area,area_title,tot_emp,jobs_1000_orig,loc_quotient,pct_total)
+
+psychologists_county <- x %>%
+  filter(str_detect(occ_code, "^19-303")) %>%
+  filter(str_detect(area_type, "2")) %>%
+  select(area,area_title,tot_emp,jobs_1000_orig,loc_quotient,pct_total)
+
+psychiatrists_county <- x %>%
+  filter(str_detect(occ_code, "^29-1223")) %>%
+  filter(str_detect(area_type, "2")) %>%
+  select(area,area_title,tot_emp,jobs_1000_orig,loc_quotient,pct_total)
+
+social_service <- x %>%
+  filter(str_detect(occ_code, "^21-10")) %>%
+  filter(str_detect(area_type, "2")) %>%
+  select(area,area_title,tot_emp,jobs_1000_orig,loc_quotient,pct_total)
+
+
+```
+
+
+
+```{r}
+
+ss <- social_service %>%
+  select(area,area_title,jobs_1000_orig) %>%
+  rename("ss" = jobs_1000_orig) %>%
+  na.omit()
+
+ss$ss <- as.numeric(ss$ss)
+
+r2 <- religious_county %>%
+  select(area,area_title,jobs_1000_orig) %>%
+rename("r2" = jobs_1000_orig) %>%
+  na.omit()
+
+r2$r2 <- as.numeric(r2$r2)
+
+psy2 <- psychologists_county %>%
+  select(area,area_title,jobs_1000_orig) %>% 
+rename("psy2" = jobs_1000_orig) %>%
+  na.omit()
+
+psy2$psy2 <- as.numeric(psy2$psy2)
+
+dr2 <- psychiatrists_county %>%
+  select(area,area_title,jobs_1000_orig) %>%
+  rename("dr" = jobs_1000_orig) %>%
+  na.omit()
+
+dr2$dr <- as.numeric(dr2$dr)
+
+data1 <- inner_join(dr2,psy2, by="area") %>%
+  na.omit()
+
+data1 <- inner_join(data1,ss, by="area") %>%
+  na.omit()
+
+write_rds(data1,"sacred_profane/data1.rds")
+
+graph1 <- data1 %>%
+ggplot(aes(x=psy2,y=dr))+ geom_point() +   geom_smooth(method = "lm", se = FALSE) +
+  scale_y_log10() + scale_x_log10()+ 
+  labs(x= "Religion Employment per 1000 ", y = "Psychiatrist Employmnet per 1000", 
+       title = "Religion vs Psychiatrist Across Counties") +
+  theme_classic()
+
+graph1
+
+lm()
+
+data1+ggsave("temp_graphs/plot.png")
+
+```
+
+# About
+
+This webapp is the final project for the GOV 1005. 
+
+## The Sacred and The Profane 
+
+The following project attempts to see if the number of psychiatrists per capita declines in counties where there is an abundant number of clergy per capita. Additionally, the project attempts to look for patterns, correlates, and distributions of clergy and of psychiatrists per capita throughout the United States. 
+
+Research papers include:
+
+“The clergy as a source of mental health assistance: What Americans Believe” by Christopher G. Ellison
+
+“Patterns and Correlates of Contacting Clergy for Mental Disorders in the United States” by Philip S. Wang & Patricia A Berglund
+
+‘Religiousness and mental health: a review’
+
+“The role of religion and spirituality in mental health”
+
+Key Counties to consider include Jefferson County, Alabama, where religious service attendance is 62.9% of the population, Graham County, Arizona, and Ouachita County Arkansas. 
+
+Key links to look into include:
+
+https://www.usatoday.com/story/news/2018/03/13/most-religious-counties-every-state-u-s/421946002/
+
+https://www.jstor.org/stable/20058132?seq=1
+
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1360908/
+
+https://journals.lww.com/co-psychiatry/Abstract/2014/09000/The_role_of_religion_and_spirituality_in_mental.9.aspx
+
+### Raw Data Sources
+
+The American Medical Association (AMA) Masterfile to calculate the number of psychiatrists, and psychiatric subspecialists practicing in the United States. Additionally, a study "Estimating the Distribution of the US Psychiatric Subespecialist Workforce" published in December 2018.
+
+To calculate the number of Clergy per county, the U.S. Bureau of Labor Statistics was consulted. The data available includes employment of clergy by county, published on May 2018.
+
+Country population has been taken from the United States Census Bureau.
+
+### The map and data explained:
+The following maps display the distribution of clergy and psychiatrists per 100,000 citizens in each county in the United States. 
+
+### Walk-Through Video:
+
+Watch the following video to understand the visualization:
+
+#### Created by:
+Benjamin Villa Wiesner, a student in the Master in Design Engineering program at Harvard University. 
+
+```{r}
+
+# http://www.sthda.com/english/wiki/saving-data-into-r-data-format-rds-and-rdata
+# https://shiny.rstudio.com/articles/layout-guide.html
+
+# library plotly 
+
+# https://news.gallup.com/poll/161543/provo-orem-utah-religious-metro-area.aspx#2
+
+# https://www.citylab.com/equity/2013/04/americas-most-and-least-religious-metro-areas/5180/
+
+
+```
+
